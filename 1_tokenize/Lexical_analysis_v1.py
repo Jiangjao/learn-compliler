@@ -58,6 +58,7 @@ def evaluate(node):
     if op == '/': return evaluate(left) / evaluate(right)
 
 # --- 测试 ---
+# text = "3 + 5 * ((((10 - 2)))))"
 text = "3 + 5 * (10 - 2)"
 lexer = Lexer(text)
 print(lexer.tokens)
@@ -67,6 +68,7 @@ ast = parser.parse()
 print(f"AST 结构: {ast}")
 print(f"计算结果: {evaluate(ast)}")
 
+# 注意正则无法匹配各种可能的算术表达式
 # ['3', '+', '5', '*', '(', '10', '-', '2', ')']
 # AST 结构: ('+', 3, ('*', 5, ('-', 10, 2)))
 # 计算结果: 43
