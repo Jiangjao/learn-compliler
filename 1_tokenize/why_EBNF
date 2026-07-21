@@ -1,0 +1,117 @@
+**扩展巴科斯范式（EBNF, Extended Backus-Naur Form）**，简单来说，就是**用来书写“编程语言语法规则手册”的通用语言**。
+
+如果把编程语言比作一栋大楼，那么：
+* **源代码**就是建好的一栋栋大楼。
+* **解析器（Parser）**就是质检员，检查大楼盖得合不合规。
+* **EBNF** 就是大楼的**标准设计图纸**。
+
+以下从它解决的问题、常用符号、以及它与你写的解析器代码之间的神奇对应关系，来为你详细解释它是干什么的。
+
+---
+
+### 一、 为什么需要 EBNF？（它解决什么问题）
+
+在计算机科学早期，发明一门新语言时，设计者需要向别人解释这门语言的语法。
+如果用自然语言（比如中文或英文）去描述，会非常冗长且容易产生歧义。例如：
+> “一个变量声明语句应该以 `int` 开头，后面跟着一个变量名，然后你可以选择写一个等号和初始值，最后必须用分号结束。”
+
+这种描述不仅不严谨，计算机也看不懂。
+
+为了**精确、无歧义地定义一门语言的语法结构**，科学家们发明了巴科斯范式（BNF），后来为了书写更简练，又升级成了**扩展巴科斯范式（EBNF）** [1]。
+
+现在，无论是 Java、Python、Go、SQL 还是 JSON，它们的官方文档里都有一份用 EBNF（或其变体）写成的语法说明书 [2]。任何人只要拿着这份说明书，写出来的解析器标准都是完全一致的。
+
+---
+
+### 二、 EBNF 的常用符号与含义
+
+EBNF 借鉴了正则表达式的思路，用极简的符号来表达复杂的结构。最常用的符号只有几个：
+
+| 符号 | 含义 | 对应正则表达式 | 举例 | 解释 |
+| :--- | :--- | :--- | :--- | :--- |
+| `|` | **或**（选择） | `|` | `A | B` | 要么是 A，要么是 B |
+| `[ ... ]` 或 `?` | **可选**（0 次或 1 次）| `?` | `['=' Expr]` | 等号和表达式可有可无 |
+| `{ ... }` 或 `*` | **重复**（0 次或多次）| `*` | `Digit*` | 可以有任意多个数字，也可以没有 |
+| `( ... )` | **分组** | `( )` | `('+' | '-')` | 把加号和减号归为一组 |
+| `""` 或 `''` | **终结符**（字面量） | 无 | `'int'` | 必须是硬编码的单词 `int` |
+
+---
+
+### 三、 一个直观的例子
+
+我们用 EBNF 来定义一下**“如何声明一个整型变量”**：
+
+```antlr
+intDeclaration : 'int' Identifier [ '=' expression ] ';' ;
+```
+
+读懂这行 EBNF 只需要三秒钟：
+1. 一个变量声明（`intDeclaration`）必须以单词 `'int'` 开头。
+2. 后面必须跟着一个标识符（`Identifier`，即变量名）。
+3. 接着是**可选的**（用 `[ ]` 包裹）初始化部分：一个等号 `'='` 加上一个表达式（`expression`）。
+4. 最后必须以分号 `';'` 结束。
+
+---
+
+### 四、 为什么学习编译器必须懂 EBNF？（最神奇的联系）
+
+在手写**递归下降解析器**时，EBNF 不仅仅是设计图纸，它甚至可以**直接翻译成代码**。EBNF 的符号与解析器的代码结构有着 **1:1 的映射关系**：
+
+#### 1. 映射一：EBNF 中的 `|`（选择） $\rightarrow$ 代码中的 `if-else` 或 `switch`
+* **EBNF 规则**：
+  ```antlr
+  statement : intDeclaration | expressionStatement ;
+  ```
+* **翻译成代码**：
+  ```python
+  def parse_statement(self):
+      if self.peek().type == "INT":
+          return self.parse_int_declaration()
+      else:
+          return self.parse_expression_statement()
+  ```
+
+#### 2. 映射二：EBNF 中的 `*` 或 `{}`（重复） $\rightarrow$ 代码中的 `while` 循环
+* **EBNF 规则**：
+  ```antlr
+  additiveExpression : term (('+' | '-') term)* ;
+  ```
+* **翻译成代码**（也就是你在前几章写过的）：
+  ```python
+  def parse_expression(self):
+      left = self.parse_term()
+      while self.match("+", "-"): # 对应 * 循环
+          op = self.previous()
+          right = self.parse_term()
+          left = BinaryOpNode(op, left, right)
+      return left
+  ```
+
+#### 3. 映射三：EBNF 中的 `[ ]` 或 `?`（可选） $\rightarrow$ 代码中的 `if` 判断
+* **EBNF 规则**：
+  ```antlr
+  intDeclaration : 'int' Identifier [ '=' expression ] ';' ;
+  ```
+* **翻译成代码**：
+  ```python
+  def parse_int_declaration(self):
+      self.consume("INT")
+      name = self.consume("IDENTIFIER")
+      
+      initializer = None
+      if self.match("="): # 对应 [ '=' expression ]
+          initializer = self.parse_expression()
+          
+      self.consume(";")
+      return VarDeclNode(name, initializer)
+  ```
+
+---
+
+### 总结
+
+EBNF 是**语言设计者**和**编译器开发者**之间的桥梁。
+* 作为一个**设计工具**，它让你在写代码前，先在纸上把语言的语法理清楚（防止逻辑冲突，比如左递归）。
+* 作为一个**指导手册**，它让你在写解析器代码时，可以像“填空”一样，把 EBNF 翻译成 `if`、`while` 和函数调用。
+
+甚至现在的很多工具（如 ANTLR），可以直接读取你写的 EBNF 文件，**自动生成**整套解析器代码 [3]。因此，它是编译原理中含金量极高的一项底层基本功。
